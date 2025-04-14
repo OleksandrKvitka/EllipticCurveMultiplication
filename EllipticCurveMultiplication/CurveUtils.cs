@@ -116,13 +116,13 @@ namespace EllipticCurveMultiplication
 
         private static List<ECPoint> ConvertAffineToHomogeneous(ECCurve curve, List<ECPoint> affinePoints)
         {
-            var projectivePoints = new List<ECPoint>();
+            var homogeneousPoints = new List<ECPoint>();
             var p = curve.Field.Characteristic;
 
-            foreach (var affine in affinePoints)
+            foreach (var affinePoint in affinePoints)
             {
-                var x = affine.XCoord.ToBigInteger();
-                var y = affine.YCoord.ToBigInteger();
+                var x = affinePoint.XCoord.ToBigInteger();
+                var y = affinePoint.YCoord.ToBigInteger();
 
                 for (BigInteger z = BigInteger.Two; z.CompareTo(p) < 0; z = z.Add(BigInteger.One))
                 {
@@ -134,11 +134,11 @@ namespace EllipticCurveMultiplication
                     var zField = curve.FromBigInteger(z);
 
                     var point = curve.CreateRawPoint(xField, yField, new ECFieldElement[] { zField });
-                    projectivePoints.Add(point);
+                    homogeneousPoints.Add(point);
                 }
             }
 
-            return projectivePoints;
+            return homogeneousPoints;
         }
 
         private static List<ECPoint> ConvertAffineToJacobian(ECCurve curve, List<ECPoint> affinePoints)

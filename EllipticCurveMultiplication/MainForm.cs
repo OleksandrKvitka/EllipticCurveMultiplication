@@ -25,9 +25,12 @@ namespace EllipticCurveMultiplication
         private ComboBox methodComboBox;
         private Button multiplyButton;
 
+        private DataGridView timeGrid;
+
         public ECCurve curve;
         private List<ECPoint> curvePoints = new List<ECPoint>();
         private List<ECPoint> multipliedPoints = new List<ECPoint>();
+        private Dictionary<ECPoint, long> multiplicationTimes = new Dictionary<ECPoint, long>();
 
         public MainForm()
         {
@@ -42,6 +45,7 @@ namespace EllipticCurveMultiplication
             AddMultiplicationMethodDropdown();
             AddMultiplyButton();
             AddResultGrid();
+            AddTimeGrid();
         }
     }  
 }

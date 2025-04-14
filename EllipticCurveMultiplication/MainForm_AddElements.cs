@@ -215,5 +215,22 @@ namespace EllipticCurveMultiplication
 
             Controls.Add(resultGrid);
         }
+
+        private void AddTimeGrid()
+        {
+            timeGrid = new DataGridView
+            {
+                Location = new Point(resultGrid.Location.X + resultGrid.Width + 20, resultGrid.Location.Y),
+                Size = new Size(200, 380),
+                ReadOnly = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+            };
+
+            timeGrid.Columns.Add("Time", "Multiplication time (ms)");
+
+            Controls.Add(timeGrid);
+        }
     }
 }

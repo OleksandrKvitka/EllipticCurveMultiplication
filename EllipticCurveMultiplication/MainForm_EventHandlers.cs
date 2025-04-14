@@ -82,16 +82,22 @@ namespace EllipticCurveMultiplication
                     curve = CurveUtils.CreateCurve(selectedCurve, coordinateSystem);
                 }
 
-                // Clear generated data
-                curvePoints.Clear();
-                multipliedPoints.Clear();
-                pointsGrid.Rows.Clear();
-                resultGrid.Rows.Clear();
+                ClearData();
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Failed to recreate curve:\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ClearData()
+        {
+            curvePoints.Clear();
+            multipliedPoints.Clear();
+            pointsGrid.Rows.Clear();
+            resultGrid.Rows.Clear();
+            multiplicationTimes.Clear();
+            timeGrid.Rows.Clear();
         }
 
 
@@ -139,10 +145,8 @@ namespace EllipticCurveMultiplication
                         curve = CurveUtils.CreateCurve(selectedCurve, coordinateSystem);
                 }
 
+                ClearData();
                 // Generate points
-                pointsGrid.Rows.Clear();
-                curvePoints.Clear();
-
                 string selectedName = curveComboBox.SelectedItem.ToString();
 
                 if (selectedName == customCurveName)
@@ -176,8 +180,15 @@ namespace EllipticCurveMultiplication
 
         private void MultiplyPoints(ECPoint point, int scalar, MultiplicationMethod method, CoordinateSystem coordinateSystem)
         {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
             var result = CurveUtils.MultiplyPoint(point, scalar, method);
+
+            stopwatch.Stop();
+            multiplicationTimes[result] = stopwatch.ElapsedTicks;
+
             multipliedPoints.Add(result);
+
             string rx = result.XCoord.ToBigInteger().ToString();
             string ry = result.YCoord.ToBigInteger().ToString();
             string rz = (coordinateSystem == CoordinateSystem.Affine) ? "1" : result.GetZCoords()[0].ToBigInteger().ToString();
@@ -221,6 +232,20 @@ namespace EllipticCurveMultiplication
                     foreach (int i in selectedIndexes)
                     {
                         MultiplyPoints(curvePoints[i], scalar, method, coordinateSystem);
+                    }
+                }
+
+                timeGrid.Rows.Clear();
+
+                foreach (var result in multipliedPoints)
+                {
+                    if (multiplicationTimes.TryGetValue(result, out long time))
+                    {
+                        timeGrid.Rows.Add(time.ToString());
+                    }
+                    else
+                    {
+                        timeGrid.Rows.Add("–");
                     }
                 }
             }
