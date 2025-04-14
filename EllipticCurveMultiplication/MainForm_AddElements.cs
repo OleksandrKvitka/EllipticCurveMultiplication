@@ -41,6 +41,8 @@ namespace EllipticCurveMultiplication
                 DataSource = Enum.GetValues(typeof(CoordinateSystem))
             };
 
+            coordinateComboBox.SelectedIndexChanged += CoordinateComboBox_SelectedIndexChanged;
+
             Controls.Add(coordinateComboBox);
         }
 

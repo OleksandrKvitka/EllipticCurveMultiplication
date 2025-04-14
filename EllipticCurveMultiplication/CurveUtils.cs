@@ -13,10 +13,8 @@ namespace EllipticCurveMultiplication
         Affine = 0,
         Homogeneous = 1,
         Jacobian = 2,
-        LambdaProjective = 3,
-        JacobianChudnovsky = 4,
-        JacobianModified = 5,
-        LambdaAffine = 6
+        JacobianChudnovsky = 3,
+        JacobianModified = 4
     }
     public static class CurveUtils
     {
@@ -60,25 +58,49 @@ namespace EllipticCurveMultiplication
         }
 
         // For custom curves, uses brute-force quadratic residue check
+
         public static List<ECPoint> GeneratePoints(ECCurve curve, int limit = 0)
+        {
+            var system = curve.CoordinateSystem;
+
+            var affinePoints = GenerateAffinePoints(curve, limit);
+
+            switch (system)
+            {
+                case ECCurve.COORD_AFFINE:
+                    return affinePoints;
+
+                case ECCurve.COORD_HOMOGENEOUS:
+                    return ConvertAffineToHomogeneous(curve, affinePoints);
+
+                case ECCurve.COORD_JACOBIAN:
+                case ECCurve.COORD_JACOBIAN_CHUDNOVSKY:
+                case ECCurve.COORD_JACOBIAN_MODIFIED:
+                    return ConvertAffineToJacobian(curve, affinePoints);
+
+                default:
+                    throw new NotSupportedException($"Coordinate system {system} is not supported.");
+            }
+        }
+
+        private static List<ECPoint> GenerateAffinePoints(ECCurve curve, int limit = 0)
         {
             var points = new List<ECPoint>();
             BigInteger p = curve.Field.Characteristic;
 
             for (BigInteger x = BigInteger.Zero; x.CompareTo(p) < 0; x = x.Add(BigInteger.One))
             {
-                BigInteger rhs = x.ModPow(new BigInteger("3"), p)
+                BigInteger rhs = x.ModPow(BigInteger.Three, p)
                     .Add(curve.A.ToBigInteger().Multiply(x))
                     .Add(curve.B.ToBigInteger())
                     .Mod(p);
 
                 for (BigInteger y = BigInteger.Zero; y.CompareTo(p) < 0; y = y.Add(BigInteger.One))
                 {
-                    if (y.ModPow(new BigInteger("2"), p).Equals(rhs))
+                    if (y.ModPow(BigInteger.Two, p).Equals(rhs))
                     {
                         ECPoint point = curve.CreatePoint(x, y);
 
-                        // Convert to selected coordinate system
                         point = curve.ImportPoint(point);
 
                         points.Add(point);
@@ -90,6 +112,63 @@ namespace EllipticCurveMultiplication
             }
 
             return points;
+        }
+
+        private static List<ECPoint> ConvertAffineToHomogeneous(ECCurve curve, List<ECPoint> affinePoints)
+        {
+            var projectivePoints = new List<ECPoint>();
+            var p = curve.Field.Characteristic;
+
+            foreach (var affine in affinePoints)
+            {
+                var x = affine.XCoord.ToBigInteger();
+                var y = affine.YCoord.ToBigInteger();
+
+                for (BigInteger z = BigInteger.Two; z.CompareTo(p) < 0; z = z.Add(BigInteger.One))
+                {
+                    BigInteger xProj = x.Multiply(z).Mod(p);
+                    BigInteger yProj = y.Multiply(z).Mod(p);
+
+                    var xField = curve.FromBigInteger(xProj);
+                    var yField = curve.FromBigInteger(yProj);
+                    var zField = curve.FromBigInteger(z);
+
+                    var point = curve.CreateRawPoint(xField, yField, new ECFieldElement[] { zField });
+                    projectivePoints.Add(point);
+                }
+            }
+
+            return projectivePoints;
+        }
+
+        private static List<ECPoint> ConvertAffineToJacobian(ECCurve curve, List<ECPoint> affinePoints)
+        {
+            var jacobianPoints = new List<ECPoint>();
+            var p = curve.Field.Characteristic;
+
+            foreach (var affinePoint in affinePoints)
+            {
+                var x = affinePoint.XCoord.ToBigInteger();
+                var y = affinePoint.YCoord.ToBigInteger();
+
+                for (BigInteger z = BigInteger.Two; z.CompareTo(p) < 0; z = z.Add(BigInteger.One))
+                {
+                    BigInteger z2 = z.ModPow(BigInteger.Two, p);
+                    BigInteger z3 = z.ModPow(BigInteger.Three, p);
+
+                    BigInteger xJacobian = x.Multiply(z2).Mod(p);
+                    BigInteger yJacobian = y.Multiply(z3).Mod(p);
+
+                    var xField = curve.FromBigInteger(xJacobian);
+                    var yField = curve.FromBigInteger(yJacobian);
+                    var zField = curve.FromBigInteger(z);
+
+                    var jacobianPoint = curve.CreateRawPoint(xField, yField, new ECFieldElement[] { zField });
+                    jacobianPoints.Add(jacobianPoint);
+                }
+            }
+
+            return jacobianPoints;
         }
 
         private static AbstractECMultiplier CreateMultiplier(MultiplicationMethod method)

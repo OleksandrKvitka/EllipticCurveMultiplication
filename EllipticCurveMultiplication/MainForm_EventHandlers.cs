@@ -60,6 +60,41 @@ namespace EllipticCurveMultiplication
             bTextBox.ReadOnly = !editable;
         }
 
+        private void CoordinateComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (curveComboBox.SelectedItem == null || coordinateComboBox.SelectedItem == null)
+                return;
+
+            try
+            {
+                // Parse coordinate system
+                var coordinateSystem = (CoordinateSystem)coordinateComboBox.SelectedItem;
+
+                // Recreate the curve
+                string selectedCurve = curveComboBox.SelectedItem.ToString();
+
+                if (selectedCurve == customCurveName)
+                {
+                    curve = CurveUtils.CreateCurve(pTextBox.Text, aTextBox.Text, bTextBox.Text, coordinateSystem);
+                }
+                else
+                {
+                    curve = CurveUtils.CreateCurve(selectedCurve, coordinateSystem);
+                }
+
+                // Clear generated data
+                curvePoints.Clear();
+                multipliedPoints.Clear();
+                pointsGrid.Rows.Clear();
+                resultGrid.Rows.Clear();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to recreate curve:\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+
         private void CurveComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
             string selected = curveComboBox.SelectedItem.ToString();
