@@ -177,7 +177,10 @@ namespace EllipticCurveMultiplication
             {
                 case MultiplicationMethod.MontgomeryLadder:
                     return new MontgomeryLadderMultiplier();
-
+                case MultiplicationMethod.WNafL2R:
+                    return new WNafL2RMultiplier();
+                case MultiplicationMethod.FixedPointComb:
+                    return new FixedPointCombMultiplier();
                 default:
                     throw new NotSupportedException($"Unsupported multiplication method: {method}");
             }
@@ -185,7 +188,7 @@ namespace EllipticCurveMultiplication
 
         public static ECPoint MultiplyPoint(ECPoint point, int scalar, MultiplicationMethod method)
         {
-            var multiplier = CreateMultiplier(MultiplicationMethod.MontgomeryLadder);
+            var multiplier = CreateMultiplier(method);
             return multiplier.Multiply(point, BigInteger.ValueOf(scalar));
         }
     }

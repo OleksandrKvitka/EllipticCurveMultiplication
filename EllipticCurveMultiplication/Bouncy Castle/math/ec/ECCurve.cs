@@ -378,6 +378,8 @@ namespace Org.BouncyCastle.Math.EC
             for (int i = 0; i < len; ++i)
             {
                 ECPoint p = points[off + i];
+                if (p.IsInfinity)
+                    continue;
                 p.RawXCoord.EncodeTo(table, pos);       pos += FE_BYTES;
                 p.RawYCoord.EncodeTo(table, pos);       pos += FE_BYTES;
             }

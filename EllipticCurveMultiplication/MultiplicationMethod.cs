@@ -2,6 +2,8 @@
 {
     public enum MultiplicationMethod
     {
-        MontgomeryLadder
+        MontgomeryLadder,
+        FixedPointComb,
+        WNafL2R,
     }
 }
