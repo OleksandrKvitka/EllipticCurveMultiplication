@@ -185,7 +185,7 @@ namespace EllipticCurveMultiplication
 
         public static ECPoint MultiplyPoint(ECPoint point, int scalar, MultiplicationMethod method)
         {
-            var multiplier = CreateMultiplier(method);
+            var multiplier = CreateMultiplier(MultiplicationMethod.MontgomeryLadder);
             return multiplier.Multiply(point, BigInteger.ValueOf(scalar));
         }
     }
