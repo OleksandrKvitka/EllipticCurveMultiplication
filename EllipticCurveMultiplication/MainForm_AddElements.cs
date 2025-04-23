@@ -92,7 +92,7 @@ namespace EllipticCurveMultiplication
         {
             Label label = new Label
             {
-                Text = "Number of points:",
+                Text = "Кількість точок:",
                 Location = new Point(20, 210),
                 AutoSize = true
             };
@@ -113,7 +113,7 @@ namespace EllipticCurveMultiplication
         {
             generatePointsButton = new Button
             {
-                Text = "Generate Points",
+                Text = "Згенерувати точки",
                 Location = new Point(20, 250),
                 Size = new Size(250, 30)
             };
@@ -146,7 +146,7 @@ namespace EllipticCurveMultiplication
         {
             Label label = new Label
             {
-                Text = "Scalar (k):",
+                Text = "Множник (k):",
                 Location = new Point(20, 310),
                 AutoSize = true
             };
@@ -167,7 +167,7 @@ namespace EllipticCurveMultiplication
         {
             Label label = new Label
             {
-                Text = "Multiplication method:",
+                Text = "Метод множення:",
                 Location = new Point(20, 340),
                 AutoSize = true
             };
@@ -178,7 +178,7 @@ namespace EllipticCurveMultiplication
                 Location = new Point(130, 335),
                 Size = new Size(140, 25),
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                DataSource = Enum.GetValues(typeof(MultiplicationMethod))
+                DataSource = GetMultiplicationMethodItems()
             };
             Controls.Add(methodComboBox);
         }
@@ -187,7 +187,7 @@ namespace EllipticCurveMultiplication
         {
             multiplyButton = new Button
             {
-                Text = "Multiply",
+                Text = "Помножити",
                 Location = new Point(20, 370),
                 Size = new Size(250, 30)
             };
@@ -228,7 +228,7 @@ namespace EllipticCurveMultiplication
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
             };
 
-            timeGrid.Columns.Add("Time", "Multiplication time (µs)");
+            timeGrid.Columns.Add("Час", "ас множення (мкс)");
 
             Controls.Add(timeGrid);
         }
@@ -237,8 +237,8 @@ namespace EllipticCurveMultiplication
         {
             exportButton = new Button
             {
-                Text = "Export data to .csv",
-                Location = new Point(20, 420), // adjust as needed
+                Text = "Експортувати дані у .csv",
+                Location = new Point(20, 420),
                 Size = new Size(250, 30)
             };
 
@@ -251,7 +251,7 @@ namespace EllipticCurveMultiplication
         {
             Label fromLabel = new Label
             {
-                Text = "Scalar from:",
+                Text = "Множник від:",
                 Location = new Point(20, 470),
                 AutoSize = true
             };
@@ -269,7 +269,7 @@ namespace EllipticCurveMultiplication
 
             Label toLabel = new Label
             {
-                Text = "to:",
+                Text = "до:",
                 Location = new Point(180, 470),
                 AutoSize = true
             };
@@ -290,7 +290,7 @@ namespace EllipticCurveMultiplication
         {
             runTestsButton = new Button
             {
-                Text = "Run Tests",
+                Text = "Тестування",
                 Location = new Point(20, 500),
                 Size = new Size(250, 30)
             };

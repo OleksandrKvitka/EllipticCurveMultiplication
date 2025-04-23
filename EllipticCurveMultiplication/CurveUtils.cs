@@ -5,13 +5,14 @@ using Org.BouncyCastle.Math.EC;
 using Org.BouncyCastle.Math.EC.Multiplier;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace EllipticCurveMultiplication
 {
     public enum CoordinateSystem
     {
         Affine = 0,
-        Homogeneous = 1,
+        Projective = 1,
         Jacobian = 2,
         JacobianChudnovsky = 3,
         JacobianModified = 4
@@ -171,7 +172,7 @@ namespace EllipticCurveMultiplication
             return jacobianPoints;
         }
 
-        private static AbstractECMultiplier CreateMultiplier(MultiplicationMethod method)
+        public static AbstractECMultiplier CreateMultiplier(MultiplicationMethod method)
         {
             switch (method)
             {
@@ -186,10 +187,25 @@ namespace EllipticCurveMultiplication
             }
         }
 
-        public static ECPoint MultiplyPoint(ECPoint point, int scalar, MultiplicationMethod method)
+        public static ECPoint MultiplyPoint(ECPoint point, int scalar, MultiplicationMethod method, out double timeMicroseconds)
         {
             var multiplier = CreateMultiplier(method);
-            return multiplier.Multiply(point, BigInteger.ValueOf(scalar));
+
+            var stopwatch = Stopwatch.StartNew();
+            var result = multiplier.Multiply(point, BigInteger.ValueOf(scalar));
+            stopwatch.Stop();
+
+            timeMicroseconds = (double)stopwatch.ElapsedTicks * 1_000_000 / Stopwatch.Frequency;
+            return result;
+        }
+
+        public static string FormatPoint(ECPoint point)
+        {
+            var x = point.XCoord?.ToBigInteger().ToString() ?? "";
+            var y = point.YCoord?.ToBigInteger().ToString() ?? "";
+            var z = point.GetZCoords().Length > 0 ? point.GetZCoords()[0].ToBigInteger().ToString() : "";
+
+            return string.IsNullOrEmpty(z) ? $"{x},{y}" : $"{x},{y},{z}";
         }
     }
 }

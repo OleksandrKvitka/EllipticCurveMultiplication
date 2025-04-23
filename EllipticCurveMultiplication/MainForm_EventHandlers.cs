@@ -183,12 +183,8 @@ namespace EllipticCurveMultiplication
 
         private void MultiplyPoints(ECPoint point, int scalar, MultiplicationMethod method, CoordinateSystem coordinateSystem)
         {
-            var stopwatch = Stopwatch.StartNew();
-            var result = CurveUtils.MultiplyPoint(point, scalar, method);
-            stopwatch.Stop();
-
-            double microseconds = (double)stopwatch.ElapsedTicks * 1_000_000 / Stopwatch.Frequency;
-            multiplicationTimes[result] = microseconds;
+            var result = CurveUtils.MultiplyPoint(point, scalar, method, out double time);
+            multiplicationTimes[result] = time;
 
             multipliedPoints.Add(result);
 
@@ -209,7 +205,8 @@ namespace EllipticCurveMultiplication
                 }
 
                 var scalar = (int)scalarInput.Value;
-                var method = (MultiplicationMethod)methodComboBox.SelectedItem;
+                var selectedItem = methodComboBox.SelectedItem as MethodItem;
+                var method = selectedItem?.Method ?? MultiplicationMethod.MontgomeryLadder;
                 var coordinateSystem = (CoordinateSystem)coordinateComboBox.SelectedItem;
 
                 multipliedPoints.Clear();
@@ -328,77 +325,10 @@ namespace EllipticCurveMultiplication
 
         private void RunTestsButton_Click(object sender, EventArgs e)
         {
-            if (curve == null || curvePoints.Count == 0)
-            {
-                MessageBox.Show("No curve or points to test.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            int from = (int)scalarFromInput.Value;
-            int to = (int)scalarToInput.Value;
-
-            if (to < from)
-            {
-                MessageBox.Show("Invalid scalar range.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            using (SaveFileDialog saveDialog = new SaveFileDialog())
-            {
-                saveDialog.Filter = "CSV files (*.csv)|*.csv";
-                saveDialog.Title = "Save Test Results";
-
-                if (saveDialog.ShowDialog() != DialogResult.OK)
-                    return;
-
-                try
-                {
-                    using (StreamWriter writer = new StreamWriter(saveDialog.FileName))
-                    {
-                        writer.WriteLine("Curve,CoordinateSystem,Point,Result,Scalar,Method,Time(µs)");
-
-                        string curveName;
-
-                        if (curveComboBox.SelectedItem?.ToString() == customCurveName)
-                        {
-                            curveName = $"custom: p={pTextBox.Text} a={aTextBox.Text} b={bTextBox.Text}";
-                        }
-                        else
-                        {
-                            curveName = curveComboBox.SelectedItem?.ToString() ?? "unknown";
-                        }
-
-                        string system = ((CoordinateSystem)coordinateComboBox.SelectedItem).ToString();
-
-                        foreach (var point in curvePoints)
-                        {
-                            string pointStr = PointToString(point);
-
-                            for (int k = from; k <= to; k++)
-                            {
-                                foreach (MultiplicationMethod method in Enum.GetValues(typeof(MultiplicationMethod)))
-                                {
-                                    var stopwatch = Stopwatch.StartNew();
-                                    var result = CurveUtils.MultiplyPoint(point, k, method);
-                                    stopwatch.Stop();
-                                    double microseconds = (double)stopwatch.ElapsedTicks * 1_000_000 / Stopwatch.Frequency;
-
-                                    string resultStr = result.IsInfinity
-                                        ? "Infinity"
-                                        : PointToString(result);
-                                    writer.WriteLine($"{curveName},{system},{pointStr},{resultStr},{k},{method},{microseconds.ToString("F2", CultureInfo.InvariantCulture)}");
-                                }
-                            }
-                        }
-                    }
-
-                    MessageBox.Show("Test results exported successfully!", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Export failed:\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
+            var test = new Test();
+            //test.GetPointData();
+            //test.MultiplyPointData();
+            test.SummarizeBenchmarkResults();
         }
 
     }
