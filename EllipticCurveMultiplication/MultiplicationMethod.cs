@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace EllipticCurveMultiplication
+﻿namespace EllipticCurveMultiplication
 {
     public enum MultiplicationMethod
     {

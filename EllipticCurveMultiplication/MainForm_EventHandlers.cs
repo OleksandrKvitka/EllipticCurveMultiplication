@@ -1,9 +1,8 @@
 ﻿using Org.BouncyCastle.Asn1.X9;
+using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Math.EC;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -181,7 +180,7 @@ namespace EllipticCurveMultiplication
             }
         }
 
-        private void MultiplyPoints(ECPoint point, int scalar, MultiplicationMethod method, CoordinateSystem coordinateSystem)
+        private void MultiplyPoints(ECPoint point, BigInteger scalar, MultiplicationMethod method, CoordinateSystem coordinateSystem)
         {
             var result = CurveUtils.MultiplyPoint(point, scalar, method, out double time);
             multiplicationTimes[result] = time;
@@ -204,7 +203,7 @@ namespace EllipticCurveMultiplication
                     return;
                 }
 
-                var scalar = (int)scalarInput.Value;
+                var scalar = new BigInteger(scalarInput.Value.ToString());
                 var selectedItem = methodComboBox.SelectedItem as MethodItem;
                 var method = selectedItem?.Method ?? MultiplicationMethod.MontgomeryLadder;
                 var coordinateSystem = (CoordinateSystem)coordinateComboBox.SelectedItem;
@@ -327,8 +326,10 @@ namespace EllipticCurveMultiplication
         {
             var test = new Test();
             //test.GetPointData();
+            //test.GenerateScalars();
             //test.MultiplyPointData();
-            test.SummarizeBenchmarkResults();
+            //test.SummarizeResults();
+            test.SplitResultsByMethodAndSystem();
         }
 
     }

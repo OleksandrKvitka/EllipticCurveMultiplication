@@ -1,11 +1,13 @@
 ﻿using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Math.EC;
+using Org.BouncyCastle.Security;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows.Forms;
 
 namespace EllipticCurveMultiplication
@@ -14,6 +16,7 @@ namespace EllipticCurveMultiplication
     {
         public static int POINT_AMOUNT = 100;
         public Dictionary<string, List<ECPoint>> PointData;
+        public Dictionary<int, List<BigInteger>> Scalars;
 
         public void GetPointData()
         {
@@ -172,6 +175,63 @@ namespace EllipticCurveMultiplication
                 .Create();
         }
 
+        public void GenerateScalars()
+        {
+            var allLengths = CurveUtils.GetAllFieldSizesFromCurves();
+            allLengths.Add(32);
+            allLengths.Add(64);
+            Scalars = new Dictionary<int, List<BigInteger>>();
+            var rng = new SecureRandom();
+            foreach (int bitLength in allLengths)
+            {
+                var list = new List<BigInteger>();
+                for (int i = 0; i < POINT_AMOUNT; i++)
+                {
+                    BigInteger scalar = new BigInteger(bitLength, rng);
+                    while (scalar.SignValue == 0 || scalar.BitLength != bitLength) scalar = new BigInteger(bitLength, rng);
+                    list.Add(scalar);
+                }
+                Scalars[bitLength] = list;
+            }
+        }
+
+        public List<List<BigInteger>> GetScalarsForCurve(string curveName)
+        {
+            var result = new List<List<BigInteger>>();
+
+            var parameters = ECNamedCurveTable.GetByName(curveName);
+            if (parameters == null)
+                return result;
+
+            var field = parameters.Curve.Field;
+            int fieldSize = field.Dimension > 1
+                ? parameters.Curve.FieldSize
+                : parameters.Curve.Field.Characteristic.BitLength;
+
+            List<int> validLengths = new List<int> { 32 };
+            while (true)
+            {
+                int next = validLengths.Last() * 2;
+                if (next >= fieldSize)
+                    break;
+                validLengths.Add(next);
+            }
+
+            if (fieldSize - validLengths.Last() < fieldSize / 2)
+                validLengths.RemoveAt(validLengths.Count - 1);
+
+            validLengths.Add(fieldSize);
+
+            foreach (int len in validLengths)
+            {
+                if (Scalars.TryGetValue(len, out var list))
+                    result.Add(list);
+            }
+
+            return result;
+        }
+
+
         public void MultiplyPointData()
         {
             if (PointData == null || PointData.Count == 0)
@@ -180,15 +240,8 @@ namespace EllipticCurveMultiplication
                 return;
             }
 
-            // Generate scalars
-            var scalars = new List<int>();
-            scalars.AddRange(Enumerable.Range(100, 901).Where((x, i) => i % 9 == 0).Take(100));       // 100–1000
-            scalars.AddRange(Enumerable.Range(1000, 9001).Where((x, i) => i % 90 == 0).Take(100));    // 1000–10000
-            scalars.AddRange(Enumerable.Range(10000, 90001).Where((x, i) => i % 900 == 0).Take(100)); // 10000–100000
-
             var methods = Enum.GetValues(typeof(MultiplicationMethod)).Cast<MultiplicationMethod>();
 
-            // Ask where to save
             using (var dialog = new SaveFileDialog())
             {
                 dialog.Filter = "CSV files (*.csv)|*.csv";
@@ -197,18 +250,36 @@ namespace EllipticCurveMultiplication
                 if (dialog.ShowDialog() != DialogResult.OK)
                     return;
 
-                // Count total operations
-                int totalOps = PointData.Sum(p => p.Value.Count) * scalars.Count * methods.Count();
+                // Estimate total operations
+                int totalOps = 0;
+                foreach (var kvp in PointData)
+                {
+                    string curveName = kvp.Key.Split('-')[0];
+                    var scalarGroups = GetScalarsForCurve(curveName);
+                    int scalarsCount = scalarGroups.Sum(g => g.Count);
+                    totalOps += kvp.Value.Count * scalarsCount * methods.Count();
+                }
+
                 int completed = 0;
 
                 using (var writer = new StreamWriter(dialog.FileName))
                 {
-                    writer.WriteLine("Curve-System,Point,Method,Scalar,Time (µs)");
+                    writer.WriteLine("Curve-System;Curve Module Size;Method;Scalar Size;Time (µs)");
 
                     foreach (var kvp in PointData)
                     {
                         string key = kvp.Key;
                         List<ECPoint> points = kvp.Value;
+
+                        string curveName = key.Split('-')[0];
+                        var scalarGroups = GetScalarsForCurve(curveName);
+
+                        var parameters = ECNamedCurveTable.GetByName(curveName);
+                        if (parameters == null) continue;
+
+                        int fieldSize = parameters.Curve.Field.Dimension > 1
+                            ? parameters.Curve.FieldSize
+                            : parameters.Curve.Field.Characteristic.BitLength;
 
                         Console.WriteLine($"[INFO] Processing {key} - {points.Count} points");
 
@@ -221,7 +292,7 @@ namespace EllipticCurveMultiplication
                             // Warm-up
                             try
                             {
-                                var warmup = multiplier.Multiply(points[0], BigInteger.One);
+                                _ = multiplier.Multiply(points[0], BigInteger.One);
                             }
                             catch (Exception ex)
                             {
@@ -231,27 +302,30 @@ namespace EllipticCurveMultiplication
 
                             foreach (var point in points)
                             {
-                                string pointStr = CurveUtils.FormatPoint(point);
-
-                                foreach (int scalar in scalars)
+                                foreach (var group in scalarGroups)
                                 {
-                                    try
-                                    {
-                                        double time;
-                                        var result = CurveUtils.MultiplyPoint(point, scalar, method, out time);
+                                    int scalarSize = group[0].BitLength; // all scalars in group have same size
 
-                                        writer.WriteLine($"{key},{pointStr},{method},{scalar},{time.ToString("F2", CultureInfo.InvariantCulture)}");
-                                    }
-                                    catch (Exception ex)
+                                    foreach (var scalar in group)
                                     {
-                                        Console.WriteLine($"[ERROR] {key}/{method}/{scalar}: {ex.Message}");
-                                    }
+                                        try
+                                        {
+                                            double time;
+                                            var result = CurveUtils.MultiplyPoint(point, scalar, multiplier, out time);
 
-                                    completed++;
-                                    if (completed % 1000 == 0 || completed == totalOps)
-                                    {
-                                        double percent = completed * 100.0 / totalOps;
-                                        Console.WriteLine($"[PROGRESS] {completed} / {totalOps} operations completed ({percent:F1}%)");
+                                            writer.WriteLine($"{key};{fieldSize};{method};{scalarSize};{time.ToString("F2", CultureInfo.InvariantCulture)}");
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine($"[ERROR] {key}/{method}/{scalarSize}: {ex.Message}");
+                                        }
+
+                                        completed++;
+                                        if (completed % 1000 == 0 || completed == totalOps)
+                                        {
+                                            double percent = completed * 100.0 / totalOps;
+                                            Console.WriteLine($"[PROGRESS] {completed} / {totalOps} operations completed ({percent:F1}%)");
+                                        }
                                     }
                                 }
                             }
@@ -265,16 +339,14 @@ namespace EllipticCurveMultiplication
             }
         }
 
-        public void SummarizeBenchmarkResults()
+        public void SummarizeResults()
         {
-            string inputPath;
-            string outputPath;
+            string inputPath, outputPath;
 
-            // Ask for input CSV file
             using (var openDialog = new OpenFileDialog())
             {
                 openDialog.Filter = "CSV files (*.csv)|*.csv";
-                openDialog.Title = "Select Benchmark Results CSV";
+                openDialog.Title = "Оберіть файл з результатами множення";
 
                 if (openDialog.ShowDialog() != DialogResult.OK)
                     return;
@@ -282,11 +354,10 @@ namespace EllipticCurveMultiplication
                 inputPath = openDialog.FileName;
             }
 
-            // Ask for output file
             using (var saveDialog = new SaveFileDialog())
             {
                 saveDialog.Filter = "CSV files (*.csv)|*.csv";
-                saveDialog.Title = "Save Summary Output";
+                saveDialog.Title = "Зберегти зведений файл";
 
                 if (saveDialog.ShowDialog() != DialogResult.OK)
                     return;
@@ -294,37 +365,43 @@ namespace EllipticCurveMultiplication
                 outputPath = saveDialog.FileName;
             }
 
-            var summary = new Dictionary<(string curveSystem, string method, string sizeGroup), (double totalTime, int count)>();
+            var methodTranslations = MainForm.GetMultiplicationMethodItems()
+                .ToDictionary(i => i.Method.ToString(), i => i.DisplayName);
+
+            var coordTranslations = MainForm.GetCoordinateSystemItems()
+                .ToDictionary(i => i.Key.ToString(), i => i.Value);
+
+            var summary = new Dictionary<(string curveSystem, int fieldSize, string method, string coordSystem, int scalarSize), (double totalTime, int count)>();
 
             using (var reader = new StreamReader(inputPath))
             {
-                string line;
+                string header = reader.ReadLine();
                 int lineNumber = 0;
 
-                // Skip header
-                reader.ReadLine();
-
-                while ((line = reader.ReadLine()) != null)
+                while (!reader.EndOfStream)
                 {
+                    var line = reader.ReadLine();
                     lineNumber++;
-                    if (lineNumber % 500_000 == 0)
-                        Console.WriteLine($"[PROGRESS] Processed {lineNumber:N0} lines");
+                    if (string.IsNullOrWhiteSpace(line)) continue;
 
-                    var parts = line.Split(',');
-                    if (parts.Length < 5)
+                    var parts = line.Split(';');
+
+                    if (parts.Length != 5)
                         continue;
 
-                    string curveSystem = parts[0];
-                    string method = parts[2];
+                    string curveSystem = parts[0].Trim();
+                    string method = parts[2].Trim();
+                    if (!int.TryParse(parts[3], out int scalarSize)) continue;
+                    if (!int.TryParse(parts[1], out int fieldSize)) continue;
+                    if (!double.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out double time)) continue;
 
-                    if (!int.TryParse(parts[3], out int scalar))
-                        continue;
+                    int dashIndex = curveSystem.LastIndexOf('-');
+                    if (dashIndex == -1) continue;
 
-                    if (!double.TryParse(parts[4], NumberStyles.Any, CultureInfo.InvariantCulture, out double time))
-                        continue;
+                    string curve = curveSystem.Substring(0, dashIndex);
+                    string system = curveSystem.Substring(dashIndex + 1);
 
-                    string sizeGroup = GetScalarGroup(scalar);
-                    var key = (curveSystem, method, sizeGroup);
+                    var key = (curve, fieldSize, method, system, scalarSize);
 
                     if (summary.TryGetValue(key, out var existing))
                     {
@@ -334,31 +411,139 @@ namespace EllipticCurveMultiplication
                     {
                         summary[key] = (time, 1);
                     }
+
+                    if (lineNumber % 500_000 == 0)
+                        Console.WriteLine($"[PROGRESS] Оброблено {lineNumber:N0} рядків");
                 }
             }
 
-            using (var writer = new StreamWriter(outputPath))
+            using (var writer = new StreamWriter(outputPath, false, new UTF8Encoding(true)))
             {
-                writer.WriteLine("Curve-System,Method,Scalar size,Average Time (µs)");
+                writer.WriteLine("Крива;Розмір модуля;Метод множення;Система координат;Розмір скаляра;Середній час (мкс)");
 
-                foreach (var kvp in summary.OrderBy(k => k.Key.curveSystem).ThenBy(k => k.Key.method).ThenBy(k => k.Key.sizeGroup))
+                foreach (var kvp in summary.OrderBy(k => k.Key.curveSystem).ThenBy(k => k.Key.method).ThenBy(k => k.Key.scalarSize))
                 {
-                    var (curveSystem, method, sizeGroup) = kvp.Key;
+                    var (curve, fieldSize, method, system, scalarSize) = kvp.Key;
                     var (totalTime, count) = kvp.Value;
                     double avg = totalTime / count;
 
-                    writer.WriteLine($"{curveSystem},{method},{sizeGroup},{avg.ToString("F2", CultureInfo.InvariantCulture)}");
+                    string methodTranslated = methodTranslations.TryGetValue(method, out var m) ? m : method;
+                    string systemTranslated = coordTranslations.TryGetValue(system, out var s) ? s : system;
+
+                    writer.WriteLine($"{curve};{fieldSize};{methodTranslated};{systemTranslated};{scalarSize};{avg.ToString("F2", CultureInfo.InvariantCulture)}");
                 }
             }
 
-            MessageBox.Show("Summary file created successfully.", "Done", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("Зведення завершено успішно.", "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private string GetScalarGroup(int scalar)
+
+        public void SplitResultsByMethodAndSystem()
         {
-            if (scalar < 1000) return "small";
-            if (scalar < 10000) return "medium";
-            return "large";
+            string inputPath;
+            string outputFolder;
+
+            // Вибір файлу з підсумками
+            using (var openDialog = new OpenFileDialog())
+            {
+                openDialog.Filter = "CSV files (*.csv)|*.csv";
+                openDialog.Title = "Оберіть зведений CSV файл";
+
+                if (openDialog.ShowDialog() != DialogResult.OK)
+                    return;
+
+                inputPath = openDialog.FileName;
+            }
+
+            // Вибір папки для збереження
+            using (var folderDialog = new FolderBrowserDialog())
+            {
+                folderDialog.Description = "Оберіть папку для збереження нових CSV-файлів";
+
+                if (folderDialog.ShowDialog() != DialogResult.OK)
+                    return;
+
+                outputFolder = folderDialog.SelectedPath;
+            }
+
+            // Зчитування вхідного файлу
+            var data = new List<(string curve, int fieldSize, string method, string system, int scalarSize, string key, double avgTime)>();
+            var scalarSizes = new SortedSet<int>();
+            var methodSystemGroups = new HashSet<string>();
+
+            using (var reader = new StreamReader(inputPath))
+            {
+                string header = reader.ReadLine();
+
+                while (!reader.EndOfStream)
+                {
+                    var line = reader.ReadLine();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    var parts = line.Split(';');
+                    if (parts.Length != 6) continue;
+
+                    string curve = parts[0].Trim();
+                    string system = parts[3].Trim();
+                    string method = parts[2].Trim();
+
+                    if (!int.TryParse(parts[1], out int fieldSize)) continue;
+                    if (!int.TryParse(parts[4], out int scalarSize)) continue;
+                    if (!double.TryParse(parts[5], NumberStyles.Any, CultureInfo.InvariantCulture, out double avgTime)) continue;
+
+                    scalarSizes.Add(scalarSize);
+
+                    string methodSystemKey = $"{method}-{system}";
+                    methodSystemGroups.Add(methodSystemKey);
+
+                    string key = $"{curve} ({fieldSize})";
+
+                    data.Add((curve, fieldSize, method, system, scalarSize, key, avgTime));
+                }
+            }
+
+            // Для кожної групи Метод-Система координат
+            foreach (var groupKey in methodSystemGroups)
+            {
+                var parts = groupKey.Split('-');
+                if (parts.Length != 2) continue;
+
+                string method = parts[0];
+                string system = parts[1];
+
+                var filtered = data
+                    .Where(d => d.method == method && d.system == system)
+                    .GroupBy(d => d.key)
+                    .OrderBy(g => g.First().fieldSize)
+                    .ToList();
+
+                var outputPath = Path.Combine(outputFolder, $"{method}-{system}.csv");
+
+                using (var writer = new StreamWriter(outputPath, false, new UTF8Encoding(true)))
+                {
+                    var headerCols = new List<string> { "Крива (розмір модуля)" };
+                    headerCols.AddRange(scalarSizes.Select(s => s.ToString()));
+                    writer.WriteLine(string.Join(";", headerCols));
+
+                    foreach (var group in filtered)
+                    {
+                        var row = new List<string> { group.Key };
+
+                        foreach (var scalar in scalarSizes)
+                        {
+                            var value = group.FirstOrDefault(r => r.scalarSize == scalar);
+                            if (value.avgTime > 0)
+                                row.Add(value.avgTime.ToString("F2", CultureInfo.InvariantCulture));
+                            else
+                                row.Add("");
+                        }
+
+                        writer.WriteLine(string.Join(";", row));
+                    }
+                }
+            }
+
+            MessageBox.Show("Результати успішно розділено по файлах.", "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
     }

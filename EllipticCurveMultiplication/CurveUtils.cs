@@ -187,17 +187,23 @@ namespace EllipticCurveMultiplication
             }
         }
 
-        public static ECPoint MultiplyPoint(ECPoint point, int scalar, MultiplicationMethod method, out double timeMicroseconds)
+        public static ECPoint MultiplyPoint(ECPoint point, BigInteger scalar, MultiplicationMethod method, out double timeMicroseconds)
         {
             var multiplier = CreateMultiplier(method);
+            return MultiplyPoint(point, scalar, multiplier, out timeMicroseconds);
+        }
 
+        public static ECPoint MultiplyPoint(ECPoint point, BigInteger scalar, AbstractECMultiplier multiplier, out double timeMicroseconds)
+        {
             var stopwatch = Stopwatch.StartNew();
-            var result = multiplier.Multiply(point, BigInteger.ValueOf(scalar));
+            var result = multiplier.Multiply(point, scalar);
             stopwatch.Stop();
 
             timeMicroseconds = (double)stopwatch.ElapsedTicks * 1_000_000 / Stopwatch.Frequency;
             return result;
         }
+
+
 
         public static string FormatPoint(ECPoint point)
         {
@@ -206,6 +212,27 @@ namespace EllipticCurveMultiplication
             var z = point.GetZCoords().Length > 0 ? point.GetZCoords()[0].ToBigInteger().ToString() : "";
 
             return string.IsNullOrEmpty(z) ? $"{x},{y}" : $"{x},{y},{z}";
+        }
+
+        public static HashSet<int> GetAllFieldSizesFromCurves()
+        {
+            var sizes = new HashSet<int>();
+
+            foreach (string name in ECNamedCurveTable.Names)
+            {
+                var parameters = ECNamedCurveTable.GetByName(name);
+                if (parameters == null) continue;
+
+                var field = parameters.Curve.Field;
+
+                int bitLength = field.Dimension > 1
+                    ? parameters.Curve.FieldSize
+                    : field.Characteristic.BitLength;
+
+                sizes.Add(bitLength);
+            }
+
+            return sizes;
         }
     }
 }
