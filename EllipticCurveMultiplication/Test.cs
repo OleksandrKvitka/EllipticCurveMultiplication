@@ -493,7 +493,7 @@ namespace EllipticCurveMultiplication
 
                     scalarSizes.Add(scalarSize);
 
-                    string methodSystemKey = $"{method}-{system}";
+                    string methodSystemKey = $"{method}_{system}";
                     methodSystemGroups.Add(methodSystemKey);
 
                     string key = $"{curve} ({fieldSize})";
@@ -502,10 +502,9 @@ namespace EllipticCurveMultiplication
                 }
             }
 
-            // Для кожної групи Метод-Система координат
             foreach (var groupKey in methodSystemGroups)
             {
-                var parts = groupKey.Split('-');
+                var parts = groupKey.Split('_');
                 if (parts.Length != 2) continue;
 
                 string method = parts[0];
@@ -517,7 +516,7 @@ namespace EllipticCurveMultiplication
                     .OrderBy(g => g.First().fieldSize)
                     .ToList();
 
-                var outputPath = Path.Combine(outputFolder, $"{method}-{system}.csv");
+                var outputPath = Path.Combine(outputFolder, $"{method}_{system}.csv");
 
                 using (var writer = new StreamWriter(outputPath, false, new UTF8Encoding(true)))
                 {
